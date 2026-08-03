@@ -1,0 +1,12 @@
+# Example: mutate over-limit TokenRequests down to 24h instead of denying.
+apiVersion: tokenfiltering.openshift.io/v1alpha1
+kind: TokenLifetimePolicy
+metadata:
+  name: cluster
+spec:
+  maxExpiration: 24h
+  onExceed: Mutate
+  exemptNamespaces:
+    - openshift
+    - openshift-*
+    - kube-*

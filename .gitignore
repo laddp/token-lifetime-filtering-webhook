@@ -1,0 +1,23 @@
+# Binaries
+/bin/
+/webhook
+*.exe
+*.test
+*.out
+
+# Go
+/vendor/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Research / local cluster artifacts (not part of the product)
+stuff/
+
+# Build
+cover.out
+coverage.html

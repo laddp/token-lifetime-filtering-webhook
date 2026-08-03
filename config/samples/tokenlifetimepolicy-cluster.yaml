@@ -1,0 +1,11 @@
+apiVersion: tokenfiltering.openshift.io/v1alpha1
+kind: TokenLifetimePolicy
+metadata:
+  name: cluster
+spec:
+  maxExpiration: 1y
+  onExceed: Deny
+  exemptNamespaces:
+    - openshift
+    - openshift-*
+    - kube-*

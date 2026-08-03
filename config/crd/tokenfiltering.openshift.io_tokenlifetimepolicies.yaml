@@ -1,0 +1,68 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: tokenlifetimepolicies.tokenfiltering.openshift.io
+spec:
+  group: tokenfiltering.openshift.io
+  names:
+    kind: TokenLifetimePolicy
+    listKind: TokenLifetimePolicyList
+    plural: tokenlifetimepolicies
+    shortNames:
+      - tlp
+    singular: tokenlifetimepolicy
+  scope: Cluster
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          description: TokenLifetimePolicy is the Schema for the tokenlifetimepolicies API.
+          type: object
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              properties:
+                maxExpiration:
+                  description: >-
+                    Maximum allowed TokenRequest lifetime. Human-readable durations
+                    are accepted (s, m, h, d, w, y), e.g. "24h", "7d", "1y".
+                    Defaults to "1y" when empty.
+                  type: string
+                  default: "1y"
+                onExceed:
+                  description: >-
+                    Controls whether over-limit requests are denied or mutated to the max.
+                    Defaults to Deny.
+                  type: string
+                  enum:
+                    - Deny
+                    - Mutate
+                  default: Deny
+                exemptNamespaces:
+                  description: >-
+                    Shell-style globs of namespaces that skip enforcement.
+                    Empty means no exemptions.
+                  type: array
+                  items:
+                    type: string
+            status:
+              type: object
+          x-kubernetes-validations:
+            - rule: "self.metadata.name == 'cluster'"
+              message: "TokenLifetimePolicy is a singleton; metadata.name must be 'cluster'"
+      additionalPrinterColumns:
+        - name: MaxExpiration
+          type: string
+          jsonPath: .spec.maxExpiration
+        - name: OnExceed
+          type: string
+          jsonPath: .spec.onExceed
