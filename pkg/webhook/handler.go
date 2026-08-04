@@ -2,19 +2,19 @@ package webhook
 
 import (
 	"encoding/json"
+	"expvar"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"sync/atomic"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/klog/v2"
 
 	"github.com/pladd/token-lifetime-filtering-webhook/pkg/policy"
 )
@@ -22,24 +22,21 @@ import (
 var (
 	universalDeserializer = serializer.NewCodecFactory(runtime.NewScheme()).UniversalDeserializer()
 
-	decisionsTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "token_lifetime_webhook_decisions_total",
-			Help: "Admission decisions made by the token lifetime webhook.",
-		},
-		[]string{"result"},
-	)
-	decisionLatency = prometheus.NewHistogram(
-		prometheus.HistogramOpts{
-			Name:    "token_lifetime_webhook_decision_duration_seconds",
-			Help:    "Latency of token lifetime admission decisions.",
-			Buckets: prometheus.DefBuckets,
-		},
-	)
+	decisionsAllow  atomic.Uint64
+	decisionsDeny   atomic.Uint64
+	decisionsMutate atomic.Uint64
 )
 
 func init() {
-	prometheus.MustRegister(decisionsTotal, decisionLatency)
+	expvar.Publish("token_lifetime_webhook_decisions_allow", expvar.Func(func() any {
+		return decisionsAllow.Load()
+	}))
+	expvar.Publish("token_lifetime_webhook_decisions_deny", expvar.Func(func() any {
+		return decisionsDeny.Load()
+	}))
+	expvar.Publish("token_lifetime_webhook_decisions_mutate", expvar.Func(func() any {
+		return decisionsMutate.Load()
+	}))
 }
 
 // Handler serves admission reviews and health endpoints.
@@ -54,7 +51,7 @@ func (h *Handler) NewMux() *http.ServeMux {
 	mux.HandleFunc("/mutate", h.ServeMutate)
 	mux.HandleFunc("/healthz", h.ServeHealthz)
 	mux.HandleFunc("/readyz", h.ServeReadyz)
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", expvar.Handler())
 	return mux
 }
 
@@ -78,19 +75,19 @@ func (h *Handler) ServeReadyz(w http.ResponseWriter, _ *http.Request) {
 func (h *Handler) ServeMutate(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer func() {
-		decisionLatency.Observe(time.Since(start).Seconds())
+		slog.Debug("admission handled", "duration", time.Since(start).String())
 	}()
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		klog.Errorf("failed to read body: %v", err)
+		slog.Error("failed to read body", "err", err)
 		http.Error(w, "failed to read body", http.StatusBadRequest)
 		return
 	}
 
 	review := admissionv1.AdmissionReview{}
 	if _, _, err := universalDeserializer.Decode(body, nil, &review); err != nil {
-		klog.Errorf("failed to decode AdmissionReview: %v", err)
+		slog.Error("failed to decode AdmissionReview", "err", err)
 		http.Error(w, "failed to decode AdmissionReview", http.StatusBadRequest)
 		return
 	}
@@ -112,19 +109,19 @@ func (h *Handler) ServeMutate(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(out); err != nil {
-		klog.Errorf("failed to encode response: %v", err)
+		slog.Error("failed to encode response", "err", err)
 	}
 }
 
 func (h *Handler) admit(req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	if req.Resource.Resource != "serviceaccounts" || req.SubResource != "token" || req.Operation != admissionv1.Create {
-		decisionsTotal.WithLabelValues("allow").Inc()
+		decisionsAllow.Add(1)
 		return &admissionv1.AdmissionResponse{Allowed: true}
 	}
 
 	var tokenReq authenticationv1.TokenRequest
 	if err := json.Unmarshal(req.Object.Raw, &tokenReq); err != nil {
-		decisionsTotal.WithLabelValues("deny").Inc()
+		decisionsDeny.Add(1)
 		return denied(fmt.Sprintf("failed to decode TokenRequest: %v", err))
 	}
 
@@ -136,29 +133,36 @@ func (h *Handler) admit(req *admissionv1.AdmissionRequest) *admissionv1.Admissio
 	pol := h.Store.Get()
 	decision, err := policy.Evaluate(req.Namespace, requested, pol)
 	if err != nil {
-		klog.Errorf("policy evaluation error ns=%s sa=%s: %v", req.Namespace, req.Name, err)
-		decisionsTotal.WithLabelValues("deny").Inc()
+		slog.Error("policy evaluation error", "ns", req.Namespace, "sa", req.Name, "err", err)
+		decisionsDeny.Add(1)
 		return denied(err.Error())
 	}
 
-	klog.Infof("decision=%s ns=%s sa=%s requested=%d max=%d exempt=%v reason=%q",
-		decision.Action, req.Namespace, req.Name, requested, decision.MaxExpirationSecs, decision.Exempt, decision.Reason)
+	slog.Info("admission decision",
+		"action", decision.Action,
+		"ns", req.Namespace,
+		"sa", req.Name,
+		"requested", requested,
+		"max", decision.MaxExpirationSecs,
+		"exempt", decision.Exempt,
+		"reason", decision.Reason,
+	)
 
 	switch decision.Action {
 	case policy.ActionAllow:
-		decisionsTotal.WithLabelValues("allow").Inc()
+		decisionsAllow.Add(1)
 		return &admissionv1.AdmissionResponse{Allowed: true}
 	case policy.ActionDeny:
-		decisionsTotal.WithLabelValues("deny").Inc()
+		decisionsDeny.Add(1)
 		return denied(decision.Reason)
 	case policy.ActionMutate:
 		patch, err := expirationPatch(decision.PatchExpirationSecs)
 		if err != nil {
-			decisionsTotal.WithLabelValues("deny").Inc()
+			decisionsDeny.Add(1)
 			return denied(fmt.Sprintf("failed to build patch: %v", err))
 		}
 		pt := admissionv1.PatchTypeJSONPatch
-		decisionsTotal.WithLabelValues("mutate").Inc()
+		decisionsMutate.Add(1)
 		return &admissionv1.AdmissionResponse{
 			Allowed:   true,
 			Patch:     patch,
@@ -168,7 +172,7 @@ func (h *Handler) admit(req *admissionv1.AdmissionRequest) *admissionv1.Admissio
 			},
 		}
 	default:
-		decisionsTotal.WithLabelValues("deny").Inc()
+		decisionsDeny.Add(1)
 		return denied(fmt.Sprintf("unknown decision action %q", decision.Action))
 	}
 }
@@ -189,11 +193,6 @@ type jsonPatchOp struct {
 }
 
 func expirationPatch(seconds int64) ([]byte, error) {
-	// Replace works when the field exists; add when it does not.
-	// JSON Patch "add" on an existing path replaces for objects; for clarity we use "replace"
-	// with a fallback sequence of add — Kubernetes TokenRequest usually includes the field
-	// when set, and may omit it when unset. Using "add" is valid for both missing and present
-	// members of an object per RFC 6902 (add replaces if present).
 	ops := []jsonPatchOp{{
 		Op:    "add",
 		Path:  "/spec/expirationSeconds",

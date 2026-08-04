@@ -85,7 +85,7 @@ Flags:
 - `--tls-cert` / `--tls-key`
 - `--kubeconfig` (optional; in-cluster config by default)
 
-Endpoints: `/mutate`, `/healthz`, `/readyz`, `/metrics`.
+Endpoints: `/mutate`, `/healthz`, `/readyz`, `/metrics` (stdlib `expvar` JSON counters).
 
 ## Limitations
 

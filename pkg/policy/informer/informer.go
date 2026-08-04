@@ -3,6 +3,7 @@ package informer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	tokenv1alpha1 "github.com/pladd/token-lifetime-filtering-webhook/api/v1alpha1"
@@ -14,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
 )
 
 var policyGVR = schema.GroupVersionResource{
@@ -51,7 +51,7 @@ func Run(ctx context.Context, dyn dynamic.Interface, store *policy.Store) (cache
 			DeleteFunc: func(obj interface{}) {
 				u, err := toUnstructured(obj)
 				if err != nil {
-					klog.Errorf("delete handler: %v", err)
+					slog.Error("delete handler", "err", err)
 					return
 				}
 				store.Delete(u.GetName())
@@ -66,12 +66,12 @@ func Run(ctx context.Context, dyn dynamic.Interface, store *policy.Store) (cache
 func upsert(store *policy.Store, obj interface{}) {
 	u, err := toUnstructured(obj)
 	if err != nil {
-		klog.Errorf("upsert: %v", err)
+		slog.Error("upsert", "err", err)
 		return
 	}
 	pol, err := unstructuredToPolicy(u)
 	if err != nil {
-		klog.Errorf("convert TokenLifetimePolicy: %v", err)
+		slog.Error("convert TokenLifetimePolicy", "err", err)
 		return
 	}
 	store.Upsert(pol)

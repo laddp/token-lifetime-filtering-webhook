@@ -1,10 +1,10 @@
 package policy
 
 import (
+	"log/slog"
 	"sync"
 
 	tokenv1alpha1 "github.com/pladd/token-lifetime-filtering-webhook/api/v1alpha1"
-	"k8s.io/klog/v2"
 )
 
 // Store holds the singleton TokenLifetimePolicy/cluster in memory.
@@ -34,7 +34,10 @@ func (s *Store) Upsert(policy *tokenv1alpha1.TokenLifetimePolicy) {
 		return
 	}
 	if policy.Name != tokenv1alpha1.SingletonName {
-		klog.Warningf("ignoring TokenLifetimePolicy %q; only %q is honored", policy.Name, tokenv1alpha1.SingletonName)
+		slog.Warn("ignoring TokenLifetimePolicy; only cluster singleton is honored",
+			"name", policy.Name,
+			"expected", tokenv1alpha1.SingletonName,
+		)
 		return
 	}
 	s.mu.Lock()

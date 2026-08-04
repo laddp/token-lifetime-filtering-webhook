@@ -140,7 +140,8 @@ reinvocationPolicy: IfNeeded
 
 - Flags: `--tls-cert`, `--tls-key`, `--listen`, `--kubeconfig` (optional)
 - `/healthz` and `/readyz` (ready when policy informer synced)
-- Metrics: `token_lifetime_webhook_decisions_total{result=allow|deny|mutate}`, latency histogram
+- `/healthz` and `/readyz` (ready when policy informer synced)
+- Metrics via stdlib `expvar` at `/metrics` (allow/deny/mutate counters)
 
 ### Tests
 
@@ -157,7 +158,7 @@ reinvocationPolicy: IfNeeded
 
 ## Defaults locked in
 
-- Language: Go with client-go informers + admission HTTP server; `controller-gen` for CRD/deepcopy
+- Language: Go stdlib (`log/slog`, `expvar`, `net/http`) + `k8s.io/{api,apimachinery,client-go}` only; no other direct GitHub deps
 - Image: distroless static binary
 - No Helm/OLM in v1; plain `kubectl apply -k` / `oc apply`
 - CRD default for `maxExpiration`: `1y`
