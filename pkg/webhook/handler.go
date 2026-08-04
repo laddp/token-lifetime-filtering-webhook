@@ -5,7 +5,6 @@ import (
 	"expvar"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -15,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/klog/v2"
 
 	"github.com/pladd/token-lifetime-filtering-webhook/pkg/policy"
 )
@@ -75,19 +75,19 @@ func (h *Handler) ServeReadyz(w http.ResponseWriter, _ *http.Request) {
 func (h *Handler) ServeMutate(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer func() {
-		slog.Debug("admission handled", "duration", time.Since(start).String())
+		klog.V(4).Infof("admission handled in %s", time.Since(start))
 	}()
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		slog.Error("failed to read body", "err", err)
+		klog.Errorf("failed to read body: %v", err)
 		http.Error(w, "failed to read body", http.StatusBadRequest)
 		return
 	}
 
 	review := admissionv1.AdmissionReview{}
 	if _, _, err := universalDeserializer.Decode(body, nil, &review); err != nil {
-		slog.Error("failed to decode AdmissionReview", "err", err)
+		klog.Errorf("failed to decode AdmissionReview: %v", err)
 		http.Error(w, "failed to decode AdmissionReview", http.StatusBadRequest)
 		return
 	}
@@ -109,7 +109,7 @@ func (h *Handler) ServeMutate(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(out); err != nil {
-		slog.Error("failed to encode response", "err", err)
+		klog.Errorf("failed to encode response: %v", err)
 	}
 }
 
@@ -133,20 +133,13 @@ func (h *Handler) admit(req *admissionv1.AdmissionRequest) *admissionv1.Admissio
 	pol := h.Store.Get()
 	decision, err := policy.Evaluate(req.Namespace, requested, pol)
 	if err != nil {
-		slog.Error("policy evaluation error", "ns", req.Namespace, "sa", req.Name, "err", err)
+		klog.Errorf("policy evaluation error ns=%s sa=%s: %v", req.Namespace, req.Name, err)
 		decisionsDeny.Add(1)
 		return denied(err.Error())
 	}
 
-	slog.Info("admission decision",
-		"action", decision.Action,
-		"ns", req.Namespace,
-		"sa", req.Name,
-		"requested", requested,
-		"max", decision.MaxExpirationSecs,
-		"exempt", decision.Exempt,
-		"reason", decision.Reason,
-	)
+	klog.Infof("decision=%s ns=%s sa=%s requested=%d max=%d exempt=%v reason=%q",
+		decision.Action, req.Namespace, req.Name, requested, decision.MaxExpirationSecs, decision.Exempt, decision.Reason)
 
 	switch decision.Action {
 	case policy.ActionAllow:

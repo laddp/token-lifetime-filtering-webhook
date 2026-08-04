@@ -158,7 +158,7 @@ reinvocationPolicy: IfNeeded
 
 ## Defaults locked in
 
-- Language: Go stdlib (`log/slog`, `expvar`, `net/http`) + `k8s.io/{api,apimachinery,client-go}` only; no other direct GitHub deps
+- Language: Go stdlib (`expvar`, `net/http`) + `k8s.io/{api,apimachinery,client-go,klog}` only; no other direct GitHub deps
 - Image: distroless static binary
 - No Helm/OLM in v1; plain `kubectl apply -k` / `oc apply`
 - CRD default for `maxExpiration`: `1y`

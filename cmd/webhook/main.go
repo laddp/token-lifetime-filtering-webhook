@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +14,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog/v2"
 
 	"github.com/pladd/token-lifetime-filtering-webhook/pkg/policy"
 	"github.com/pladd/token-lifetime-filtering-webhook/pkg/policy/informer"
@@ -28,20 +28,17 @@ func main() {
 		tlsKey     = flag.String("tls-key", "/tls/tls.key", "Path to TLS private key")
 		kubeconfig = flag.String("kubeconfig", "", "Path to kubeconfig (optional; in-cluster config used if empty)")
 	)
+	klog.InitFlags(nil)
 	flag.Parse()
-
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
 	cfg, err := buildConfig(*kubeconfig)
 	if err != nil {
-		slog.Error("failed to build kubeconfig", "err", err)
-		os.Exit(1)
+		klog.Fatalf("failed to build kubeconfig: %v", err)
 	}
 
 	dyn, err := dynamic.NewForConfig(cfg)
 	if err != nil {
-		slog.Error("failed to create dynamic client", "err", err)
-		os.Exit(1)
+		klog.Fatalf("failed to create dynamic client: %v", err)
 	}
 
 	store := policy.NewStore()
@@ -50,8 +47,7 @@ func main() {
 
 	hasSynced, err := informer.Run(ctx, dyn, store)
 	if err != nil {
-		slog.Error("failed to start policy informer", "err", err)
-		os.Exit(1)
+		klog.Fatalf("failed to start policy informer: %v", err)
 	}
 
 	go waitForSync(ctx, hasSynced)
@@ -77,10 +73,9 @@ func main() {
 		_ = server.Shutdown(shutdownCtx)
 	}()
 
-	slog.Info("starting token-lifetime webhook", "addr", *listenAddr)
+	klog.Infof("starting token-lifetime webhook on %s", *listenAddr)
 	if err := server.ListenAndServeTLS(*tlsCert, *tlsKey); err != nil && err != http.ErrServerClosed {
-		slog.Error("server failed", "err", err)
-		os.Exit(1)
+		klog.Fatalf("server failed: %v", err)
 	}
 }
 
@@ -95,10 +90,10 @@ func buildConfig(kubeconfig string) (*rest.Config, error) {
 }
 
 func waitForSync(ctx context.Context, hasSynced cache.InformerSynced) {
-	slog.Info("waiting for policy informer sync")
+	klog.Info("waiting for policy informer sync")
 	if !cache.WaitForCacheSync(ctx.Done(), hasSynced) {
-		slog.Error("timed out waiting for policy informer sync")
+		klog.Error("timed out waiting for policy informer sync")
 		return
 	}
-	slog.Info("policy informer synced")
+	klog.Info("policy informer synced")
 }
