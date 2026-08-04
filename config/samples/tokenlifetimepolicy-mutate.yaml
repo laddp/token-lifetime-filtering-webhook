@@ -1,10 +1,11 @@
-# Example: mutate over-limit TokenRequests down to 30d instead of denying.
+# Example: mutate over-limit TokenRequests down to 30d12h instead of denying.
+# Composite durations like 1h30m and 30d12h are supported.
 apiVersion: tokenfiltering.openshift.io/v1alpha1
 kind: TokenLifetimePolicy
 metadata:
   name: cluster
 spec:
-  maxExpiration: 30d
+  maxExpiration: 30d12h
   onExceed: Mutate
   exemptNamespaces:
     - openshift

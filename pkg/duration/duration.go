@@ -30,7 +30,7 @@ var unitSeconds = map[rune]int64{
 // Parse converts a human-readable duration into seconds.
 // Empty input defaults to DefaultMaxExpiration ("1y").
 // Supported units (case-insensitive): s, m, h, d, w, y.
-// Compounds like "1h30m" are accepted.
+// Composites like "1h30m" and "2d12h" are accepted.
 func Parse(s string) (int64, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

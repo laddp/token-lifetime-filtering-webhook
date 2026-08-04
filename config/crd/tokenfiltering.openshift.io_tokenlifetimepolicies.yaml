@@ -34,7 +34,7 @@ spec:
                 maxExpiration:
                   description: >-
                     Maximum allowed TokenRequest lifetime. Human-readable durations including composites
-                    are accepted (s, m, h, d, w, y), e.g. "24h", "7d", "1h30m", "1y", .
+                    are accepted (s, m, h, d, w, y), e.g. "24h", "7d", "1h30m", "1y".
                     Defaults to "1y" when empty.
                   type: string
                   default: "1y"

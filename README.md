@@ -12,7 +12,7 @@ kind: TokenLifetimePolicy
 metadata:
   name: cluster   # singleton name — required
 spec:
-  maxExpiration: 1y          # human-readable; default 1y
+  maxExpiration: 1y          # human-readable (e.g. 24h, 1h30m, 7d); default 1y
   onExceed: Deny             # Deny | Mutate (default Deny)
   exemptNamespaces:          # globs; matching namespaces skip enforcement
     - openshift
@@ -31,7 +31,7 @@ spec:
 
 ### Duration units
 
-`maxExpiration` accepts `s`, `m`, `h`, `d`, `w`, `y` (case-insensitive), including compounds like `1h30m`. Empty defaults to `1y` (365 days).
+`maxExpiration` accepts `s`, `m`, `h`, `d`, `w`, `y` (case-insensitive), including composites like `1h30m` or `2d12h`. Empty defaults to `1y` (365 days).
 
 ## Install (OpenShift)
 

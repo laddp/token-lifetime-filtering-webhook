@@ -50,7 +50,7 @@ spec:
 - Type: string
 - Default when omitted / empty: `1y` (365 days = `31536000` seconds)
 - Accepted units (Go-style, case-insensitive): `s`, `m`, `h`, `d`, `w`, `y`
-  - Examples: `3600s`, `60m`, `24h`, `7d`, `1y`, compound `1h30m`
+  - Examples: `3600s`, `60m`, `24h`, `7d`, `1y`, composites `1h30m`, `2d12h`
 - Parser lives in `pkg/policy` (or `pkg/duration`); not `time.ParseDuration` alone (no `d`/`w`/`y`)
 - Comparisons and JSON patches always use integer seconds against `TokenRequest.spec.expirationSeconds`
 

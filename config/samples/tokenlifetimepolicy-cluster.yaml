@@ -1,4 +1,4 @@
-# Example: deny TokenRequests with a max expiration over 1 year.
+# Example: deny TokenRequests over 1y (composites like 1h30m also work).
 apiVersion: tokenfiltering.openshift.io/v1alpha1
 kind: TokenLifetimePolicy
 metadata:

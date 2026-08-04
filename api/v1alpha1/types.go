@@ -24,7 +24,8 @@ type OnExceed string
 // TokenLifetimePolicySpec defines the desired state of TokenLifetimePolicy.
 type TokenLifetimePolicySpec struct {
 	// MaxExpiration is the maximum allowed TokenRequest lifetime.
-	// Human-readable durations are accepted (s, m, h, d, w, y), e.g. "24h", "7d", "1y".
+	// Human-readable durations including composites are accepted (s, m, h, d, w, y),
+	// e.g. "24h", "7d", "1h30m", "1y".
 	// Defaults to "1y" when empty.
 	// +optional
 	// +kubebuilder:default="1y"
