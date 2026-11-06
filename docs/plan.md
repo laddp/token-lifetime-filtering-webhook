@@ -20,8 +20,8 @@ flowchart LR
 2. If it does not exist → allow unchanged
 3. If request namespace matches `spec.exemptNamespaces` → allow unchanged (exempt)
 4. Parse `spec.maxExpiration` to seconds (invalid duration → fail closed with a clear message)
-5. If requested `expirationSeconds` ≤ max → allow
-6. If over limit and `onExceed=Mutate` → allow with JSON patch setting `spec.expirationSeconds` to the parsed max
+5. If requested `expirationSeconds` is positive and ≤ max → allow
+6. Treat omitted or nonpositive `expirationSeconds` as unbounded; enforce it just like an over-limit request. If over limit and `onExceed=Mutate` → allow with JSON patch setting `spec.expirationSeconds` to the parsed max
 7. If over limit and `onExceed=Deny` → reject with a clear message
 8. Ignore any `TokenLifetimePolicy` objects not named `cluster` (log a warning if seen)
 9. Fail closed on decode/eval errors when the singleton exists and the namespace is not exempt (`failurePolicy: Fail`)
@@ -53,6 +53,7 @@ spec:
   - Examples: `3600s`, `60m`, `24h`, `7d`, `1y`, composites `1h30m`, `2d12h`
 - Parser lives in `pkg/policy` (or `pkg/duration`); not `time.ParseDuration` alone (no `d`/`w`/`y`)
 - Comparisons and JSON patches always use integer seconds against `TokenRequest.spec.expirationSeconds`
+- Reject numeric, multiplication, or composite-sum overflow beyond signed 64-bit integer seconds with a clear error; never use a wrapped value.
 
 **Namespace exemptions (`exemptNamespaces`):**
 - Type: `[]string` of shell-style globs (`path.Match` semantics: `*`, `?`, character classes)
@@ -85,7 +86,8 @@ Samples in `config/samples/`:
 │   └── policy/            # singleton reader, duration parse, exempt ns globs, evaluator
 ├── config/
 │   ├── crd/
-│   ├── deploy/            # Namespace, SA, RBAC, Deployment, Service, MWC
+│   ├── deploy/            # Namespace, SA, RBAC, Deployment, Service
+│   ├── webhook/           # MWC, registered only after workload readiness
 │   └── samples/           # deny / mutate / exempt-ns example policies
 ├── Dockerfile
 ├── Makefile
@@ -101,13 +103,14 @@ Research artifacts already in the repo (kubeconfigs, logs, htpasswd) stay untrac
 
 - Decode `admissionv1.AdmissionReview`
 - Only handle `CREATE` on `v1/serviceaccounts` subresource `token`
-- Unmarshal into `authenticationv1.TokenRequest`
+- Read the policy and check namespace exemptions before decoding the token object; no-policy and exempt requests allow unchanged even if the token object cannot be decoded. The outer AdmissionReview must still be decodable.
+- For requests subject to enforcement, unmarshal into `authenticationv1.TokenRequest`
 - Pass request namespace + `expirationSeconds` into evaluator
 - Switch on result:
   - **Allow** — `allowed: true` (includes exempt namespace / under limit / no policy)
   - **Deny** — `allowed: false` + message (`requested Xs exceeds max Ys`)
   - **Mutate** — `allowed: true` + base64 JSON patch replacing `/spec/expirationSeconds`
-- Log ns/sa/requested/max/mode/exempt
+- Log ns/sa/requested/max/mode/exempt; use `requested=unread` for bypassed requests and `mode=none` when no policy exists.
 
 ### Policy controller (`pkg/policy`)
 
@@ -119,6 +122,11 @@ Research artifacts already in the repo (kubeconfigs, logs, htpasswd) stay untrac
 ### Deployment (`config/deploy`)
 
 - Namespace `token-lifetime-webhook`
+- Separate workload manifests in `config/deploy` from webhook registration in `config/webhook`.
+- Install order: apply CRD → wait for Established → apply workload → wait for Deployment rollout → apply sample policy → register MWC → wait for injected CA bundle. Do not register a fail-closed webhook before its own token mounts and readiness succeed.
+- Uninstall order: remove MWC first, then policy, workload, and CRD.
+- Policy-side exemptions do not bypass webhook outages. If all replicas are unavailable and token mounts block recovery, an administrator must temporarily remove MWC registration, restore readiness, then re-register. Document that this recovery interval has no enforcement.
+- CA injection after registration can briefly reject token requests; wait for injection before verification.
 - Deployment (2 replicas), Service on `:8443`
 - TLS via OpenShift service CA (Service secret injection + `service.beta.openshift.io/inject-cabundle: "true"` on the webhook config)
 - RBAC: get/list/watch `tokenlifetimepolicies`
@@ -140,15 +148,14 @@ reinvocationPolicy: IfNeeded
 
 - Flags: `--tls-cert`, `--tls-key`, `--listen`, `--kubeconfig` (optional)
 - `/healthz` and `/readyz` (ready when policy informer synced)
-- `/healthz` and `/readyz` (ready when policy informer synced)
 - Metrics via stdlib `expvar` at `/metrics` (allow/deny/mutate counters)
 
 ### Tests
 
-- Unit: duration parser — `s`/`m`/`h`/`d`/`w`/`y`, compounds, invalid input, empty → `1y`
+- Unit: duration parser — `s`/`m`/`h`/`d`/`w`/`y`, compounds, invalid input, empty → `1y`, int64 boundary and numeric/multiplication/sum overflow
 - Unit: exempt namespace globs — empty/none, exact, `openshift-*`, match → allow, no match → enforce, invalid pattern error handling
 - Unit: evaluator — missing policy allows; Deny/Mutate over and under limit; exempt ns skips enforcement
-- Unit: webhook — deny response; mutate JSON patch; allow path
+- Unit: webhook — deny response; mutate JSON patch; allow path; malformed token objects with no policy / exempt namespace / enforced namespace; positive under/at/over-limit and omitted/nonpositive expiration in both modes
 - Unit: non-`cluster` policy objects are ignored by the reader
 - Makefile: `test`, `build`, `docker-build`, `deploy`
 
@@ -163,6 +170,7 @@ reinvocationPolicy: IfNeeded
 - No Helm/OLM in v1; plain `kubectl apply -k` / `oc apply`
 - CRD default for `maxExpiration`: `1y`
 - CRD default for `onExceed`: `Deny`
+- Omitted or nonpositive requested expiration is treated as unbounded: deny in Deny mode, patch to max in Mutate mode (after no-policy/exemption bypass).
 - `exemptNamespaces` omit/empty = no exemptions (enforce everywhere); match = allow
 - Sample/recommended exemptions: `openshift`, `openshift-*`, `kube-*` (not a CRD schema default)
 - Glob implementation: `path.Match`

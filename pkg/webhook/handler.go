@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/klog/v2"
 
+	tokenv1alpha1 "github.com/pladd/token-lifetime-filtering-webhook/api/v1alpha1"
 	"github.com/pladd/token-lifetime-filtering-webhook/pkg/policy"
 )
 
@@ -114,23 +116,38 @@ func (h *Handler) ServeMutate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) admit(req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
-	if req.Resource.Resource != "serviceaccounts" || req.SubResource != "token" || req.Operation != admissionv1.Create {
+	if req.Resource.Group != "" || req.Resource.Version != "v1" || req.Resource.Resource != "serviceaccounts" || req.SubResource != "token" || req.Operation != admissionv1.Create {
 		decisionsAllow.Add(1)
 		return &admissionv1.AdmissionResponse{Allowed: true}
 	}
 
-	var tokenReq authenticationv1.TokenRequest
-	if err := json.Unmarshal(req.Object.Raw, &tokenReq); err != nil {
-		decisionsDeny.Add(1)
-		return denied(fmt.Sprintf("failed to decode TokenRequest: %v", err))
-	}
-
-	var requested int64
-	if tokenReq.Spec.ExpirationSeconds != nil {
-		requested = *tokenReq.Spec.ExpirationSeconds
-	}
-
 	pol := h.Store.Get()
+	var requested int64
+	requestedLog, mode := "unread", "none"
+	if pol != nil {
+		mode = string(pol.Spec.OnExceed)
+		if mode == "" {
+			mode = string(tokenv1alpha1.OnExceedDeny)
+		}
+		exempt, err := policy.IsExempt(req.Namespace, pol.Spec.ExemptNamespaces)
+		if err != nil {
+			decisionsDeny.Add(1)
+			return denied(err.Error())
+		}
+		// No-policy and exempt requests do not need a decodable token object.
+		if !exempt {
+			var tokenReq authenticationv1.TokenRequest
+			if err := json.Unmarshal(req.Object.Raw, &tokenReq); err != nil {
+				decisionsDeny.Add(1)
+				return denied(fmt.Sprintf("failed to decode TokenRequest: %v", err))
+			}
+			if tokenReq.Spec.ExpirationSeconds != nil {
+				requested = *tokenReq.Spec.ExpirationSeconds
+			}
+			requestedLog = strconv.FormatInt(requested, 10)
+		}
+	}
+
 	decision, err := policy.Evaluate(req.Namespace, requested, pol)
 	if err != nil {
 		klog.Errorf("policy evaluation error ns=%s sa=%s: %v", req.Namespace, req.Name, err)
@@ -138,8 +155,8 @@ func (h *Handler) admit(req *admissionv1.AdmissionRequest) *admissionv1.Admissio
 		return denied(err.Error())
 	}
 
-	klog.Infof("decision=%s ns=%s sa=%s requested=%d max=%d exempt=%v reason=%q",
-		decision.Action, req.Namespace, req.Name, requested, decision.MaxExpirationSecs, decision.Exempt, decision.Reason)
+	klog.Infof("decision=%s ns=%s sa=%s requested=%s max=%d mode=%s exempt=%v reason=%q",
+		decision.Action, req.Namespace, req.Name, requestedLog, decision.MaxExpirationSecs, mode, decision.Exempt, decision.Reason)
 
 	switch decision.Action {
 	case policy.ActionAllow:

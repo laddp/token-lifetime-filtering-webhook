@@ -27,6 +27,12 @@ func TestParse(t *testing.T) {
 		{name: "invalid unit", in: "1x", wantErr: true},
 		{name: "number only", in: "3600", wantErr: true},
 		{name: "unit only", in: "h", wantErr: true},
+		{name: "maximum seconds", in: "9223372036854775807s", want: 9223372036854775807},
+		{name: "maximum composite", in: "153722867280912930m7s", want: 9223372036854775807},
+		{name: "number overflow", in: "9223372036854775808s", wantErr: true},
+		{name: "multiply overflow", in: "307445734561825861m", wantErr: true},
+		{name: "sum overflow", in: "9223372036854775807s1s", wantErr: true},
+		{name: "sum wraps positive", in: "9223372036854775807s9223372036854775807s3s", wantErr: true},
 	}
 
 	for _, tt := range tests {

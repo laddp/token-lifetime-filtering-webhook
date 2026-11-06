@@ -37,10 +37,15 @@ docker-build:
 
 deploy:
 	kubectl apply -f config/crd
+	kubectl wait --for=condition=Established crd/tokenlifetimepolicies.tokenfiltering.openshift.io --timeout=120s
 	kubectl apply -f config/deploy
+	kubectl rollout status deployment/token-lifetime-webhook -n token-lifetime-webhook --timeout=180s
 	kubectl apply -f config/samples/tokenlifetimepolicy-cluster.yaml
+	kubectl apply -f config/webhook
+	kubectl wait --for=jsonpath='{.webhooks[0].clientConfig.caBundle}' mutatingwebhookconfiguration/token-lifetime-webhook --timeout=120s
 
 undeploy:
+	kubectl delete -f config/webhook --ignore-not-found
 	kubectl delete -f config/samples/tokenlifetimepolicy-cluster.yaml --ignore-not-found
 	kubectl delete -f config/deploy --ignore-not-found
 	kubectl delete -f config/crd --ignore-not-found

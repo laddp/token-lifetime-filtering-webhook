@@ -24,26 +24,30 @@ spec:
 |-----------|--------|
 | No `TokenLifetimePolicy/cluster` | Allow unchanged |
 | Namespace matches `exemptNamespaces` | Allow unchanged |
-| `expirationSeconds` ≤ max | Allow |
+| Positive `expirationSeconds` ≤ max | Allow |
 | Over limit + `onExceed: Deny` | Reject |
 | Over limit + `onExceed: Mutate` | Patch `spec.expirationSeconds` to the max |
-| Unset/`0` expiration | Treated as unbounded → enforce (deny or mutate) |
+| Unset/nonpositive expiration | Treated as unbounded → enforce (deny or mutate) |
 
 ### Duration units
 
-`maxExpiration` accepts `s`, `m`, `h`, `d`, `w`, `y` (case-insensitive), including composites like `1h30m` or `2d12h`. Empty defaults to `1y` (365 days).
+`maxExpiration` accepts `s`, `m`, `h`, `d`, `w`, `y` (case-insensitive), including composites like `1h30m` or `2d12h`. Empty defaults to `1y` (365 days). Durations exceeding the maximum signed 64-bit integer seconds are rejected, including overflow in composite durations.
 
 ## Install (OpenShift)
 
 1. Build and push an image, then set it in `config/deploy/manifests.yaml` (or `make docker-build IMG=...`).
-2. Apply CRD, deploy manifests, and sample policy:
+2. Apply the CRD and workload, wait for readiness, then install the sample policy and register the webhook:
 
 ```bash
 make deploy
 # or:
 oc apply -f config/crd
+oc wait --for=condition=Established crd/tokenlifetimepolicies.tokenfiltering.openshift.io --timeout=120s
 oc apply -f config/deploy
+oc rollout status deployment/token-lifetime-webhook -n token-lifetime-webhook --timeout=180s
 oc apply -f config/samples/tokenlifetimepolicy-cluster.yaml
+oc apply -f config/webhook
+oc wait --for=jsonpath='{.webhooks[0].clientConfig.caBundle}' mutatingwebhookconfiguration/token-lifetime-webhook --timeout=120s
 ```
 
 TLS is provided by the OpenShift service CA:
@@ -51,7 +55,9 @@ TLS is provided by the OpenShift service CA:
 - Service annotation `service.beta.openshift.io/serving-cert-secret-name`
 - MutatingWebhookConfiguration annotation `service.beta.openshift.io/inject-cabundle`
 
-Wait until the CA bundle is injected and pods are Ready before expecting enforcement.
+Register the webhook only after its pods are Ready: its own service-account token mounts must succeed before a fail-closed webhook can serve requests. Keep the workload (`config/deploy`) and registration (`config/webhook`) steps separate. Wait for CA injection before verifying enforcement; token requests can temporarily fail during that injection window.
+
+`make undeploy` removes the webhook registration first. Policy-side namespace exemptions cannot bypass an unavailable webhook. If all webhook replicas are unavailable and token mounts prevent recovery, an administrator can remove registration with `oc delete -f config/webhook`, restore the workload, and repeat the readiness and registration steps above. Token requests are unenforced while registration is removed.
 
 ## Verify
 

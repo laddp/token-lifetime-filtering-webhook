@@ -2,6 +2,7 @@ package duration
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"unicode"
@@ -61,6 +62,9 @@ func Parse(s string) (int64, error) {
 		n, err := strconv.ParseInt(num.String(), 10, 64)
 		if err != nil {
 			return 0, fmt.Errorf("invalid duration %q: %w", s, err)
+		}
+		if n > (math.MaxInt64-total)/mult {
+			return 0, fmt.Errorf("invalid duration %q: exceeds maximum int64 seconds", s)
 		}
 		total += n * mult
 		num.Reset()
