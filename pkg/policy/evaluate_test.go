@@ -57,6 +57,18 @@ func TestEvaluate(t *testing.T) {
 	mutatePolicy := denyPolicy.DeepCopy()
 	mutatePolicy.Spec.OnExceed = tokenv1alpha1.OnExceedMutate
 
+	t.Run("omitted mode defaults to mutate", func(t *testing.T) {
+		defaultPolicy := denyPolicy.DeepCopy()
+		defaultPolicy.Spec.OnExceed = ""
+		d, err := policy.Evaluate("default", 7200, defaultPolicy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if d.Action != policy.ActionMutate || d.PatchExpirationSecs != 3600 {
+			t.Fatalf("got %+v", d)
+		}
+	})
+
 	t.Run("nil policy allows", func(t *testing.T) {
 		d, err := policy.Evaluate("default", 999999, nil)
 		if err != nil {

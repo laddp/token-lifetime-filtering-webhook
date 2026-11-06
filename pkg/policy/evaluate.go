@@ -57,7 +57,7 @@ func Evaluate(namespace string, requestedSeconds int64, policy *tokenv1alpha1.To
 
 	onExceed := policy.Spec.OnExceed
 	if onExceed == "" {
-		onExceed = tokenv1alpha1.OnExceedDeny
+		onExceed = tokenv1alpha1.OnExceedMutate
 	}
 
 	// Unset/zero expiration is treated as unbounded and must be enforced.

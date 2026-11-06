@@ -32,9 +32,9 @@ type TokenLifetimePolicySpec struct {
 	MaxExpiration string `json:"maxExpiration,omitempty"`
 
 	// OnExceed controls whether over-limit requests are denied or mutated to the max.
-	// Defaults to Deny.
+	// Defaults to Mutate.
 	// +optional
-	// +kubebuilder:default=Deny
+	// +kubebuilder:default=Mutate
 	OnExceed OnExceed `json:"onExceed,omitempty"`
 
 	// ExemptNamespaces is a list of shell-style globs. Matching namespaces skip enforcement.

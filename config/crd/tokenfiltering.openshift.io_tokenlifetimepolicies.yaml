@@ -41,12 +41,12 @@ spec:
                 onExceed:
                   description: >-
                     Controls whether over-limit requests are denied or mutated to the max.
-                    Defaults to Deny.
+                    Defaults to Mutate.
                   type: string
                   enum:
                     - Deny
                     - Mutate
-                  default: Deny
+                  default: Mutate
                 exemptNamespaces:
                   description: >-
                     Shell-style globs of namespaces that skip enforcement.

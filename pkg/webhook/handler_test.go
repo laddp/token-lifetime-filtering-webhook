@@ -173,7 +173,7 @@ func TestMalformedTokenPolicyScope(t *testing.T) {
 }
 
 func TestHandlerExpirationBoundaries(t *testing.T) {
-	for _, mode := range []tokenv1alpha1.OnExceed{tokenv1alpha1.OnExceedDeny, tokenv1alpha1.OnExceedMutate} {
+	for _, mode := range []tokenv1alpha1.OnExceed{"", tokenv1alpha1.OnExceedDeny, tokenv1alpha1.OnExceedMutate} {
 		for _, tt := range []struct {
 			name       string
 			expiration *int64
@@ -193,8 +193,8 @@ func TestHandlerExpirationBoundaries(t *testing.T) {
 					Spec:       tokenv1alpha1.TokenLifetimePolicySpec{MaxExpiration: "1h", OnExceed: mode},
 				})
 				out := post(t, &webhook.Handler{Store: store}, reviewFor("default", "builder", tt.expiration))
-				wantAllow := !tt.enforce || mode == tokenv1alpha1.OnExceedMutate
-				wantPatch := tt.enforce && mode == tokenv1alpha1.OnExceedMutate
+				wantAllow := !tt.enforce || mode != tokenv1alpha1.OnExceedDeny
+				wantPatch := tt.enforce && mode != tokenv1alpha1.OnExceedDeny
 				if out.Response.Allowed != wantAllow || (len(out.Response.Patch) > 0) != wantPatch {
 					t.Fatalf("unexpected response: %+v", out.Response)
 				}

@@ -39,7 +39,7 @@ metadata:
   name: cluster
 spec:
   maxExpiration: 1y          # human-readable; default 1y
-  onExceed: Mutate           # Deny | Mutate  (default: Deny)
+  onExceed: Mutate           # Deny | Mutate  (default: Mutate)
   exemptNamespaces:          # optional globs; omit/empty = no exemptions
     - openshift
     - openshift-*
@@ -169,7 +169,7 @@ reinvocationPolicy: IfNeeded
 - Image: distroless static binary
 - No Helm/OLM in v1; plain `kubectl apply -k` / `oc apply`
 - CRD default for `maxExpiration`: `1y`
-- CRD default for `onExceed`: `Deny`
+- CRD default for `onExceed`: `Mutate`; runtime evaluation and logging use Mutate when omitted/empty. The primary sample also uses Mutate.
 - Omitted or nonpositive requested expiration is treated as unbounded: deny in Deny mode, patch to max in Mutate mode (after no-policy/exemption bypass).
 - `exemptNamespaces` omit/empty = no exemptions (enforce everywhere); match = allow
 - Sample/recommended exemptions: `openshift`, `openshift-*`, `kube-*` (not a CRD schema default)

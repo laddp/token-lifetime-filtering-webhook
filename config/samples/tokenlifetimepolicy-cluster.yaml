@@ -1,11 +1,11 @@
-# Example: deny TokenRequests over 1y (composites like 1h30m also work).
+# Example: mutate TokenRequests over 1y down to the maximum (composites like 1h30m also work).
 apiVersion: tokenfiltering.openshift.io/v1alpha1
 kind: TokenLifetimePolicy
 metadata:
   name: cluster
 spec:
   maxExpiration: 1y
-  onExceed: Deny
+  onExceed: Mutate
   exemptNamespaces:
     - openshift
     - openshift-*

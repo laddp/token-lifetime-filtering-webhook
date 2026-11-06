@@ -13,7 +13,7 @@ metadata:
   name: cluster   # singleton name — required
 spec:
   maxExpiration: 1y          # human-readable (e.g. 24h, 1h30m, 7d); default 1y
-  onExceed: Deny             # Deny | Mutate (default Deny)
+  onExceed: Mutate           # Deny | Mutate (default Mutate)
   exemptNamespaces:          # globs; matching namespaces skip enforcement
     - openshift
     - openshift-*
@@ -28,6 +28,8 @@ spec:
 | Over limit + `onExceed: Deny` | Reject |
 | Over limit + `onExceed: Mutate` | Patch `spec.expirationSeconds` to the max |
 | Unset/nonpositive expiration | Treated as unbounded → enforce (deny or mutate) |
+
+Over-limit requests are mutated by default. Set `onExceed: Deny` to reject them instead.
 
 ### Duration units
 
@@ -72,7 +74,7 @@ oc create token default -n default --duration=2h
 oc create token prometheus-k8s -n openshift-monitoring --duration=720h
 ```
 
-Switch to mutate mode with:
+Apply an alternative maximum of `30d12h` in mutate mode with:
 
 ```bash
 oc apply -f config/samples/tokenlifetimepolicy-mutate.yaml

@@ -127,7 +127,7 @@ func (h *Handler) admit(req *admissionv1.AdmissionRequest) *admissionv1.Admissio
 	if pol != nil {
 		mode = string(pol.Spec.OnExceed)
 		if mode == "" {
-			mode = string(tokenv1alpha1.OnExceedDeny)
+			mode = string(tokenv1alpha1.OnExceedMutate)
 		}
 		exempt, err := policy.IsExempt(req.Namespace, pol.Spec.ExemptNamespaces)
 		if err != nil {
