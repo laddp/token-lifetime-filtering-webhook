@@ -87,6 +87,8 @@ make test
 make build
 ```
 
+The build produces `bin/token-lifetime-webhook`. The container runs the same binary as `/token-lifetime-webhook`.
+
 Flags:
 
 - `--listen` (default `:8443`)

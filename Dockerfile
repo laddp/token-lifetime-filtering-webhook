@@ -4,10 +4,10 @@ WORKDIR /workspace
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o webhook ./cmd/webhook
+RUN CGO_ENABLED=0 GOOS=linux go build -o token-lifetime-webhook ./cmd/webhook
 
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
-COPY --from=builder /workspace/webhook /webhook
+COPY --from=builder /workspace/token-lifetime-webhook /token-lifetime-webhook
 USER 65532:65532
-ENTRYPOINT ["/webhook"]
+ENTRYPOINT ["/token-lifetime-webhook"]

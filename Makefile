@@ -15,7 +15,7 @@ CONTROLLER_TOOLS_VERSION ?= v0.16.5
 all: build
 
 build:
-	CGO_ENABLED=0 go build -o bin/webhook ./cmd/webhook
+	CGO_ENABLED=0 go build -o bin/token-lifetime-webhook ./cmd/webhook
 
 test:
 	go test ./...

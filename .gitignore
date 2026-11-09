@@ -1,6 +1,6 @@
 # Binaries
 /bin/
-/webhook
+/token-lifetime-webhook
 *.exe
 *.test
 *.out

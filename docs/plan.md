@@ -166,6 +166,7 @@ reinvocationPolicy: IfNeeded
 ## Defaults locked in
 
 - Language: Go stdlib (`expvar`, `net/http`) + `k8s.io/{api,apimachinery,client-go,klog}` only; no other direct GitHub deps
+- Binary name: `token-lifetime-webhook`; `make build` writes `bin/token-lifetime-webhook` from `cmd/webhook`, and the container runs `/token-lifetime-webhook`.
 - Image: distroless static binary
 - No Helm/OLM in v1; plain `kubectl apply -k` / `oc apply`
 - CRD default for `maxExpiration`: `1y`
