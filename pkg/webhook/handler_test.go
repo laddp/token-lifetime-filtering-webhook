@@ -140,6 +140,30 @@ func TestReadyz(t *testing.T) {
 	}
 }
 
+func TestAdmissionBodyLimit(t *testing.T) {
+	store := policy.NewStore()
+	store.Upsert(&tokenv1alpha1.TokenLifetimePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
+		Spec: tokenv1alpha1.TokenLifetimePolicySpec{
+			MaxExpiration: "1h",
+		},
+	})
+
+	review := reviewFor("default", "builder", int64ptr(60))
+	review.Request.Object.Raw = append([]byte(`{"spec":{"expirationSeconds":60},"padding":"`), bytes.Repeat([]byte("x"), 1<<20)...)
+	review.Request.Object.Raw = append(review.Request.Object.Raw, []byte(`"}`)...)
+	body, err := json.Marshal(review)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/mutate", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	(&webhook.Handler{Store: store}).NewMux().ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("got status %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+}
+
 func TestMalformedTokenPolicyScope(t *testing.T) {
 	for _, tt := range []struct {
 		name       string

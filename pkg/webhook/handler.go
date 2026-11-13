@@ -21,6 +21,8 @@ import (
 	"github.com/pladd/token-lifetime-filtering-webhook/pkg/policy"
 )
 
+const maxAdmissionBodyBytes = 1 << 20
+
 var (
 	universalDeserializer = serializer.NewCodecFactory(runtime.NewScheme()).UniversalDeserializer()
 
@@ -80,6 +82,9 @@ func (h *Handler) ServeMutate(w http.ResponseWriter, r *http.Request) {
 		klog.V(4).Infof("admission handled in %s", time.Since(start))
 	}()
 
+	// AdmissionReview payloads for TokenRequest are small. Bound the body so a
+	// caller that can reach the Service cannot exhaust webhook memory.
+	r.Body = http.MaxBytesReader(w, r.Body, maxAdmissionBodyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		klog.Errorf("failed to read body: %v", err)

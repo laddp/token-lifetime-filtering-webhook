@@ -37,7 +37,7 @@ Over-limit requests are mutated by default. Set `onExceed: Deny` to reject them 
 
 ## Install (OpenShift)
 
-1. Build and push an image, then set it in `config/deploy/manifests.yaml` (or `make docker-build IMG=...`).
+1. Build and push the image referenced by the Kustomize deployment (the default is `quay.io/example/token-lifetime-webhook:latest`), then deploy it. The deployment uses `imagePullPolicy: Always`, so reapplying Kustomize picks up a newly pushed `latest` image without editing manifests.
 2. Apply the CRD and workload, wait for readiness, then install the sample policy and register the webhook:
 
 ```bash
@@ -45,7 +45,7 @@ make deploy
 # or:
 oc apply -f config/crd
 oc wait --for=condition=Established crd/tokenlifetimepolicies.tokenfiltering.openshift.io --timeout=120s
-oc apply -f config/deploy
+oc apply -k config/deploy
 oc rollout status deployment/token-lifetime-webhook -n token-lifetime-webhook --timeout=180s
 oc apply -f config/samples/tokenlifetimepolicy-cluster.yaml
 oc apply -f config/webhook
@@ -58,6 +58,8 @@ TLS is provided by the OpenShift service CA:
 - MutatingWebhookConfiguration annotation `service.beta.openshift.io/inject-cabundle`
 
 Register the webhook only after its pods are Ready: its own service-account token mounts must succeed before a fail-closed webhook can serve requests. Keep the workload (`config/deploy`) and registration (`config/webhook`) steps separate. Wait for CA injection before verifying enforcement; token requests can temporarily fail during that injection window.
+
+The webhook registration excludes the `token-lifetime-webhook` namespace so the webhook does not intercept its own ServiceAccount token requests during startup or recovery. The deployment also uses pod anti-affinity and a PodDisruptionBudget to preserve one available replica during voluntary disruptions.
 
 `make undeploy` removes the webhook registration first. Policy-side namespace exemptions cannot bypass an unavailable webhook. If all webhook replicas are unavailable and token mounts prevent recovery, an administrator can remove registration with `oc delete -f config/webhook`, restore the workload, and repeat the readiness and registration steps above. Token requests are unenforced while registration is removed.
 

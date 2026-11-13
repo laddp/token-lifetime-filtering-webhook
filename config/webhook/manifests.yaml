@@ -23,3 +23,9 @@ webhooks:
         apiVersions: ["v1"]
         resources: ["serviceaccounts/token"]
         operations: ["CREATE"]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values:
+            - token-lifetime-webhook

@@ -74,10 +74,19 @@ spec:
         app.kubernetes.io/name: token-lifetime-webhook
     spec:
       serviceAccountName: token-lifetime-webhook
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: token-lifetime-webhook
       containers:
         - name: webhook
           image: quay.io/example/token-lifetime-webhook:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           args:
             - --listen=:8443
             - --tls-cert=/tls/tls.crt
@@ -123,3 +132,16 @@ spec:
         - name: tls
           secret:
             secretName: token-lifetime-webhook-tls
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: token-lifetime-webhook
+  namespace: token-lifetime-webhook
+  labels:
+    app.kubernetes.io/name: token-lifetime-webhook
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: token-lifetime-webhook
